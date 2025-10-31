@@ -1,0 +1,11 @@
+FROM mysql:8.0-debian
+
+RUN apt-get update && apt-get install -y cron
+
+COPY backup.sh .
+
+RUN chmod +x /backup.sh
+
+RUN echo "* */12 * * * /backup.sh" | crontab -
+
+CMD ["cron", "-f"]
