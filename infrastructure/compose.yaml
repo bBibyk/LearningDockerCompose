@@ -1,0 +1,53 @@
+networks:
+  # On crée un réseau interne (type bridge) pour assurer la communication des conteneurs entre eux
+  interne:
+    driver: bridge
+
+volumes:
+  # Pour la persistan de données on crée un volume de données
+  data-persist:
+
+# Trous services sont à mettre en route
+services:
+  # Un conteneur dédié à la BD
+  mysql-annuaire:
+    image: mysql:8.0 # On part de l'image de base MySQL officielle
+    environment:
+      - MYSQL_ROOT_PASSWORD=root # Mot de passe du root
+      - MYSQL_DATABASE=test # Nom de la BD
+    networks:
+      - interne # On rend la BD accessible aux autres conteneurs sur le réseau interne
+    volumes:
+      - data-persist:/var/lib/mysql # Le volume est utilisé pour la persistance de données donc on veille à bien le relier avec le répertoire où mysql garde les données
+      - ./data_init:/docker-entrypoint-initdb.d # On transmet le fichier d'initialisation de la BD à notre conteneur, par le biais d'un point de montage. On veille à renseigner le bon dossier destination, afin de déclancher l'initialisation automatique
+    healthcheck: # Ce healthcheck a été trouvé sur internet, il permet de s'assurer que la BD est bien en ligne avant de s'y connecter
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Un conteneur dédié à l'application Spring 
+  devops:
+    build: # On utilise ici l'image custom pour notre application Spring
+      context: ./devops-image # Dossier de l'image
+      dockerfile: ./devops-dockerfile # Nom du Dockerfile à executer
+    depends_on:
+      mysql-annuaire: # On attend que la BD
+        condition: service_healthy # La condition c'est qu'elle soit bien en ligne
+    networks:
+      - interne # Ce conteneur communique avec la BD donc on le place sur le même réseau qu'elle
+    ports:
+      - "10000:8080" # On expose le port 8080 du conteneur en le mappant sur le port 10000 de la machine hôte
+
+  # Un conteneur dédié à l'interface administrateur de BD
+  phpmyadmin:
+    image: phpmyadmin:5.2.2 # On part de l'image de base PHPMyAdmin officielle
+    environment:
+      - PMA_HOST=mysql-annuaire # On précise l'IP de la BD pour que PHPMyAdmin puisse s'y connecter
+    depends_on:
+      mysql-annuaire: # On attend que la BD
+        condition: service_healthy # La condition c'est qu'elle soit bien en ligne
+    networks:
+      - interne # Ce conteneur communique avec la BD donc on le place sur le même réseau qu'elle
+    ports:
+      - "80:80"  # On expose le port 80 du conteneur en le mappant sur le port 80 de la machine hôte

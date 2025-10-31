@@ -1,0 +1,7 @@
+FROM maven:3.6.3-openjdk-17-slim
+
+COPY devops/ /user/home/devops/
+WORKDIR /user/home/devops
+RUN mvn clean package
+
+CMD ["java", "-jar", "target/devops-1.0.jar"]
